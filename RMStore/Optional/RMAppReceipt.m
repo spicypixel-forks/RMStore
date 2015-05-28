@@ -19,7 +19,13 @@
 //
 
 #import "RMAppReceipt.h"
+
+#if TARGET_OS_IPHONE
 #import <UIKit/UIKit.h>
+#else
+#import <IOKit/IOKitLib.h>
+#endif
+
 #import <openssl/pkcs7.h>
 #import <openssl/objects.h>
 #import <openssl/sha.h>
@@ -43,6 +49,62 @@ NSInteger const RMAppReceiptASN1TypeOriginalPurchaseDate = 1706;
 NSInteger const RMAppReceiptASN1TypeSubscriptionExpirationDate = 1708;
 NSInteger const RMAppReceiptASN1TypeWebOrderLineItemID = 1711;
 NSInteger const RMAppReceiptASN1TypeCancellationDate = 1712;
+
+#pragma mark - Mac UUID
+
+#if !TARGET_OS_IPHONE
+
+// Returns a CFData object, containing the computer's GUID.
+static CFDataRef CopyMACAddress(void)
+{
+    kern_return_t             kernResult;
+    mach_port_t               master_port;
+    CFMutableDictionaryRef    matchingDict;
+    io_iterator_t             iterator;
+    io_object_t               service;
+    CFDataRef                 macAddress = nil;
+ 
+    kernResult = IOMasterPort(MACH_PORT_NULL, &master_port);
+    if (kernResult != KERN_SUCCESS) {
+        // printf("IOMasterPort returned %d\n", kernResult);
+        return nil;
+    }
+ 
+    matchingDict = IOBSDNameMatching(master_port, 0, "en0");
+    if (!matchingDict) {
+        // printf("IOBSDNameMatching returned empty dictionary\n");
+        return nil;
+    }
+ 
+    kernResult = IOServiceGetMatchingServices(master_port, matchingDict, &iterator);
+    if (kernResult != KERN_SUCCESS) {
+        // printf("IOServiceGetMatchingServices returned %d\n", kernResult);
+        return nil;
+    }
+ 
+    while((service = IOIteratorNext(iterator)) != 0) {
+        io_object_t parentService;
+ 
+        kernResult = IORegistryEntryGetParentEntry(service, kIOServicePlane,
+                &parentService);
+        if (kernResult == KERN_SUCCESS) {
+            if (macAddress) CFRelease(macAddress);
+ 
+            macAddress = (CFDataRef) IORegistryEntryCreateCFProperty(parentService,
+                    CFSTR("IOMACAddress"), kCFAllocatorDefault, 0);
+            IOObjectRelease(parentService);
+        } else {
+            // printf("IORegistryEntryGetParentEntry returned %d\n", kernResult);
+        }
+ 
+        IOObjectRelease(service);
+    }
+    IOObjectRelease(iterator);
+ 
+    return macAddress;
+}
+
+#endif
 
 #pragma mark - ANS1
 
@@ -179,26 +241,47 @@ static NSURL *_appleRootCertificateURL = nil;
 
 - (BOOL)verifyReceiptHash
 {
-    // TODO: Getting the uuid in Mac is different. See: https://developer.apple.com/library/ios/releasenotes/General/ValidateAppStoreReceipt/Chapters/ValidateLocally.html#//apple_ref/doc/uid/TP40010573-CH1-SW5
+#if TARGET_OS_IPHONE
     NSUUID *uuid = [[UIDevice currentDevice] identifierForVendor];
     unsigned char uuidBytes[16];
     [uuid getUUIDBytes:uuidBytes];
+    size_t uuidLength = sizeof(uuidBytes);
+#else
+    // Getting the uuid in Mac is different. See: https://developer.apple.com/library/ios/releasenotes/General/ValidateAppStoreReceipt/Chapters/ValidateLocally.html#//apple_ref/doc/uid/TP40010573-CH1-SW5
+
+    // The GUID returned by CopyMACAddress() is a CFDataRef.  Use CFDataGetBytePtr() 
+    // and CFDataGetLength() to get a pointer to the bytes that make up the GUID and 
+    // to get its length.
+    CFDataRef uuid = CopyMACAddress();
+    unsigned char *uuidBytes = (unsigned char *)CFDataGetBytePtr(uuid);
+    size_t uuidLength = CFDataGetLength(uuid);
+#endif
+
+    @try 
+    {    
+        // Order taken from: https://developer.apple.com/library/ios/releasenotes/General/ValidateAppStoreReceipt/Chapters/ValidateLocally.html#//apple_ref/doc/uid/TP40010573-CH1-SW5
+        NSMutableData *data = [NSMutableData data];
+        [data appendBytes:uuidBytes length:uuidLength];
+        [data appendData:self.opaqueValue];
+        [data appendData:self.bundleIdentifierData];
     
-    // Order taken from: https://developer.apple.com/library/ios/releasenotes/General/ValidateAppStoreReceipt/Chapters/ValidateLocally.html#//apple_ref/doc/uid/TP40010573-CH1-SW5
-    NSMutableData *data = [NSMutableData data];
-    [data appendBytes:uuidBytes length:sizeof(uuidBytes)];
-    [data appendData:self.opaqueValue];
-    [data appendData:self.bundleIdentifierData];
-    
-    NSMutableData *expectedHash = [NSMutableData dataWithLength:SHA_DIGEST_LENGTH];
-    SHA1((const uint8_t*)data.bytes, data.length, (uint8_t*)expectedHash.mutableBytes); // Explicit casting to avoid errors when compiling as Objective-C++
-    
-    return [expectedHash isEqualToData:self.receiptHash];
+        NSMutableData *expectedHash = [NSMutableData dataWithLength:SHA_DIGEST_LENGTH];
+        SHA1((const uint8_t*)data.bytes, data.length, (uint8_t*)expectedHash.mutableBytes); // Explicit casting to avoid errors when compiling as Objective-C++
+        
+        return [expectedHash isEqualToData:self.receiptHash];
+    }
+    @finally
+    {
+#if !TARGET_OS_IPHONE
+        CFRelease(uuid);
+#endif
+    }  
 }
 
 + (RMAppReceipt*)bundleReceipt
 {
-    NSURL *URL = [[NSBundle mainBundle] appStoreReceiptURL];
+    NSURL *URL = [RMStore receiptURL];
+    
     NSString *path = URL.path;
     const BOOL exists = [[NSFileManager defaultManager] fileExistsAtPath:path isDirectory:nil];
     if (!exists) return nil;

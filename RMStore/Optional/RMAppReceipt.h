@@ -19,6 +19,7 @@
 //
 
 #import <Foundation/Foundation.h>
+#import <RMStore/RMStore.h>
 
 /** Represents the app receipt.
  */
