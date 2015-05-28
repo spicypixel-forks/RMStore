@@ -122,18 +122,18 @@ extern NSInteger const RMStoreErrorCodeUnableToCompleteVerification;
  If this method returns `nil` you should refresh the receipt by calling `refreshReceipt`.
  @see refreshReceipt
  */
-+ (NSURL*)receiptURL __attribute__((availability(ios,introduced=7.0)));
++ (NSURL*)receiptURL __attribute__((availability(ios,introduced=7.0), availability(macosx,introduced=10.7)));
 
 /** Request to refresh the App Store receipt in case the receipt is invalid or missing.
  */
-- (void)refreshReceipt __attribute__((availability(ios,introduced=7.0)));
+- (void)refreshReceipt __attribute__((availability(ios,introduced=7.0), availability(macosx,introduced=10.7)));
 
 /** Request to refresh the App Store receipt in case the receipt is invalid or missing. `successBlock` will be called if the refresh receipt request is successful, `failureBlock` if it isn't.
  @param successBlock The block to be called if the refresh receipt request is sucessful. Can be `nil`.
  @param failureBlock The block to be called if the refresh receipt request fails. Can be `nil`.
  */
 - (void)refreshReceiptOnSuccess:(void (^)())successBlock
-                        failure:(void (^)(NSError *error))failureBlock __attribute__((availability(ios,introduced=7.0)));
+                        failure:(void (^)(NSError *error))failureBlock __attribute__((availability(ios,introduced=7.0), availability(macosx,introduced=10.7)));
 
 ///---------------------------------------------
 /// @name Setting Delegates
