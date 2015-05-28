@@ -513,15 +513,19 @@ typedef void (^RMStoreSuccessBlock)();
 
 - (void)didPauseDownload:(SKDownload*)download queue:(SKPaymentQueue*)queue
 {
+#if TARGET_OS_IPHONE
     RMStoreLog(@"download %@ for product %@ paused", download.contentIdentifier, download.transaction.payment.productIdentifier);
     [self postNotificationWithName:RMSKDownloadPaused download:download userInfoExtras:nil];
+#endif
 }
 
 - (void)didUpdateDownload:(SKDownload*)download queue:(SKPaymentQueue*)queue
 {
+#if TARGET_OS_IPHONE
     RMStoreLog(@"download %@ for product %@ updated", download.contentIdentifier, download.transaction.payment.productIdentifier);
     NSDictionary *extras = @{RMStoreNotificationDownloadProgress : @(download.progress)};
     [self postNotificationWithName:RMSKDownloadUpdated download:download userInfoExtras:extras];
+#endif
 }
 
 + (BOOL)hasPendingDownloadsInTransaction:(SKPaymentTransaction*)transaction
