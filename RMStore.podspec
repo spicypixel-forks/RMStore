@@ -31,8 +31,7 @@ Pod::Spec.new do |s|
     arv.dependency 'RMStore/Core'
     arv.platforms = { :ios => '8.0', :osx => '10.7' }
     arv.source_files = 'RMStore/Optional/RMStoreAppReceiptVerificator.{h,m}', 'RMStore/Optional/RMAppReceipt.{h,m}'
-    arv.ios.dependency 'OpenSSL', '~> 1.0.1'
-    arv.osx.dependency 'OpenSSL-OSX', '~> 1.0.1'
+    arv.dependency 'OpenSSL-Universal', '~> 1.0.1'
   end
 
   s.subspec 'TransactionReceiptVerificator' do |trv|
